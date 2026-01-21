@@ -1,16 +1,24 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions as any);
-  if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = (await getServerSession(authOptions as any)) as any;
 
-  const role = String((session as any).role || "USER");
-  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  const body = await req.json().catch(() => ({} as any));
+  const role = String(session?.role || "USER");
+  if (role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = (await req.json().catch(() => ({}))) as any;
   const text = String(body?.text || "").trim();
   const imageUrl = body?.imageUrl ? String(body.imageUrl) : null;
 
@@ -23,7 +31,9 @@ export async function POST(req: Request) {
     select: { id: true, userEmail: true },
   });
 
-  if (!convos.length) return NextResponse.json({ ok: true, sent: 0 });
+  if (!convos.length) {
+    return NextResponse.json({ ok: true, sent: 0 });
+  }
 
   // crea un mensaje por conversación
   await prisma.$transaction(
@@ -32,7 +42,7 @@ export async function POST(req: Request) {
         data: {
           conversationId: c.id,
           senderRole: "ADMIN",
-          senderEmail: session.user!.email!,
+          senderEmail: String(session.user.email),
           text: text || null,
           imageUrl,
         },
@@ -42,3 +52,4 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true, sent: convos.length });
 }
+

@@ -8,7 +8,7 @@ function isAdmin(session: any) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions as any);
+  const session = (await getServerSession(authOptions as any)) as any;
   if (!isAdmin(session)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
