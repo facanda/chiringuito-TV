@@ -129,50 +129,49 @@ export const authOptions = {
   pages: { signIn: "/login" },
 
   callbacks: {
-    async jwt({ token, user }: any) {
-      // primer login (cuando authorize devuelve user)
-      if (user) {
-        token.sub = user.id;
-        token.email = user.email;
-        (token as any).role = user.role || "USER";
-        (token as any).sv = user.sessionVersion ?? 0;
-      }
+  async jwt({ token, user }: any) {
+    // 1) En el primer login, el "user" viene de authorize()
+    if (user) {
+      token.sub = user.id;
+      token.email = user.email;
+      (token as any).role = user.role || "USER";
+      (token as any).sv = user.sessionVersion ?? 0;
+    }
 
-      // en cada request: refresca desde DB
-      if (token?.sub) {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: String(token.sub) },
-          select: { isBlocked: true, sessionVersion: true, role: true },
-        });
+    // 2) En cada request, refrescamos desde DB para que role y sessionVersion sean reales
+    if (token?.sub) {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: String(token.sub) },
+        select: { isBlocked: true, sessionVersion: true, role: true },
+      });
 
-        // invalidar sesión si bloqueado o no existe
-        if (!dbUser || dbUser.isBlocked) return {};
+      // si no existe o está bloqueado -> invalida sesión
+      if (!dbUser || dbUser.isBlocked) return {};
 
-        // invalidar si cambió sessionVersion (1 dispositivo / logout all)
-        if ((token as any).sv !== dbUser.sessionVersion) return {};
+      // si cambió sessionVersion (kick/logout-all) -> invalida sesión
+      if ((token as any).sv !== dbUser.sessionVersion) return {};
 
-        // ✅ mantener role actualizado
-        (token as any).role = dbUser.role;
-      }
+      // ✅ IMPORTANTÍSIMO: mantener role siempre actualizado
+      (token as any).role = dbUser.role;
+      (token as any).sv = dbUser.sessionVersion;
+    }
 
-      return token;
-    },
-
-    async session({ session, token }: any) {
-      if (token?.sub) {
-        (session.user as any).id = token.sub;
-        (session.user as any).email = token.email;
-
-        // ✅ CLAVE: role dentro de session.user.role (lo que la UI suele leer)
-        (session.user as any).role = (token as any).role || "USER";
-
-        // opcional: también a nivel raíz
-        (session as any).role = (token as any).role || "USER";
-        (session as any).sessionVersion = (token as any).sv ?? 0;
-      }
-      return session;
-    },
+    return token;
   },
+
+  async session({ session, token }: any) {
+    // NextAuth a veces tipa session como {}
+    // así que usamos (session as any)
+    if (token?.sub) {
+      (session as any).user = (session as any).user || {};
+      (session as any).user.id = token.sub;
+      (session as any).user.email = token.email;
+      (session as any).role = (token as any).role || "USER";
+      (session as any).sessionVersion = (token as any).sv ?? 0;
+    }
+    return session;
+  },
+},
 
   events: {
     async signIn() {

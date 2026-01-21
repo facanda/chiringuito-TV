@@ -9,7 +9,6 @@ export async function requireAdmin(req: Request) {
     return { ok: false as const, res: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
 
-  // ✅ Validación real: DB manda (no el JWT)
   const user = await prisma.user.findUnique({
     where: { id: String(token.sub) },
     select: { id: true, email: true, role: true, isBlocked: true },
