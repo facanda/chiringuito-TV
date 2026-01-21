@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String?
+  password       String
+  role           Role      @default(USER)
+  isBlocked      Boolean   @default(false)
+  sessionVersion Int       @default(0) // 👈 clave para 1 dispositivo
+  lastLoginAt    DateTime?
+  lastLoginIp    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  playlist Playlist?
+}
+
+model Playlist {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  m3uText   String
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ChannelMeta {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  group     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, key])
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  email     String
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([tokenHash])
+}
+
+model GlobalPlaylist {
+  id        String   @id @default(cuid())
+  m3uText   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LoginSession {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  sessionId String   @unique
+  userAgent String?
+  ip        String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String?
+  ip        String?
+  ok        Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([ip])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String? // quien hizo la acción (admin)
+  actorEmail String?
+  action     String // e.g. USER_BLOCK, USER_KICK, PLAYLIST_UPDATE
+  targetId   String? // userId u otro
+  target     String? // email u otra referencia
+  meta       String? // JSON string
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+  @@index([targetId])
+  @@index([createdAt])
+}
+
+model Conversation {
+  id              String    @id @default(cuid())
+  userId          String
+  userEmail       String
+  status          String    @default("OPEN")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  userLastReadAt  DateTime?
+  adminLastReadAt DateTime?
+
+  messages Message[]
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderRole     String // USER | ADMIN
+  senderEmail    String
+  text           String?
+  imageUrl       String?
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model GlobalNotice {
+  id        String   @id @default(cuid())
+  message   String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AppConfig {
+  id                Int     @id @default(1)
+  maintenanceActive Boolean @default(false)
+  maintenanceMessage String @default("")
+  updatedAt         DateTime @updatedAt
+}
+
+model SystemNotice {
+  id        String   @id @default(cuid())
+  text      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([active])
+}
