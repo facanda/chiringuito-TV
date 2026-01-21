@@ -18,18 +18,18 @@ export const authOptions = {
         password: { label: "Password", type: "password" },
       },
 
-      async authorize(credentials, req) {
+      async authorize(credentials: any, req: any) {
         const email = String(credentials?.email || "").trim().toLowerCase();
         const password = String(credentials?.password || "");
         if (!email || !password) return null;
 
         // IP / UA
         const ip =
-          (req as any)?.headers?.get?.("x-forwarded-for")?.split(",")?.[0]?.trim() ||
-          (req as any)?.headers?.get?.("x-real-ip") ||
+          req?.headers?.get?.("x-forwarded-for")?.split(",")?.[0]?.trim() ||
+          req?.headers?.get?.("x-real-ip") ||
           null;
 
-        const userAgent = (req as any)?.headers?.get?.("user-agent") || null;
+        const userAgent = req?.headers?.get?.("user-agent") || null;
 
         // ✅ leemos el usuario primero (para saber si es ADMIN)
         const user = await prisma.user.findUnique({ where: { email } });
@@ -45,12 +45,13 @@ export const authOptions = {
             // ⚠️ error distinguible para el frontend
             throw new Error("MAINTENANCE");
           }
-          // si es ADMIN, seguimos normal (le pedimos contraseña y entra)
         }
 
         // bloqueado o no existe
         if (!user || user.isBlocked) {
-          await prisma.loginAttempt.create({ data: { email, ip: ip || undefined, ok: false } });
+          await prisma.loginAttempt.create({
+            data: { email, ip: ip || undefined, ok: false },
+          });
           return null;
         }
 
@@ -66,19 +67,25 @@ export const authOptions = {
         });
 
         if (failsByEmail >= 8 || failsByIp >= 12) {
-          await prisma.loginAttempt.create({ data: { email, ip: ip || undefined, ok: false } });
+          await prisma.loginAttempt.create({
+            data: { email, ip: ip || undefined, ok: false },
+          });
           return null;
         }
 
         // password check
         const ok = await bcrypt.compare(password, user.password);
         if (!ok) {
-          await prisma.loginAttempt.create({ data: { email, ip: ip || undefined, ok: false } });
+          await prisma.loginAttempt.create({
+            data: { email, ip: ip || undefined, ok: false },
+          });
           return null;
         }
 
         // login OK
-        await prisma.loginAttempt.create({ data: { email, ip: ip || undefined, ok: true } });
+        await prisma.loginAttempt.create({
+          data: { email, ip: ip || undefined, ok: true },
+        });
 
         // ✅ sessionVersion + loginSession
         const sessionId = randomUUID();
@@ -114,7 +121,7 @@ export const authOptions = {
           name: updated.name ?? "Usuario",
           role: updated.role,
           sessionVersion: updated.sessionVersion,
-        } as any;
+        };
       },
     }),
   ],
@@ -123,6 +130,7 @@ export const authOptions = {
 
   callbacks: {
     async jwt({ token, user }: any) {
+      // primer login (cuando authorize devuelve user)
       if (user) {
         token.sub = user.id;
         token.email = user.email;
@@ -130,15 +138,20 @@ export const authOptions = {
         (token as any).sv = user.sessionVersion ?? 0;
       }
 
+      // en cada request: refresca desde DB
       if (token?.sub) {
         const dbUser = await prisma.user.findUnique({
           where: { id: String(token.sub) },
           select: { isBlocked: true, sessionVersion: true, role: true },
         });
 
+        // invalidar sesión si bloqueado o no existe
         if (!dbUser || dbUser.isBlocked) return {};
+
+        // invalidar si cambió sessionVersion (1 dispositivo / logout all)
         if ((token as any).sv !== dbUser.sessionVersion) return {};
 
+        // ✅ mantener role actualizado
         (token as any).role = dbUser.role;
       }
 
@@ -149,6 +162,11 @@ export const authOptions = {
       if (token?.sub) {
         (session.user as any).id = token.sub;
         (session.user as any).email = token.email;
+
+        // ✅ CLAVE: role dentro de session.user.role (lo que la UI suele leer)
+        (session.user as any).role = (token as any).role || "USER";
+
+        // opcional: también a nivel raíz
         (session as any).role = (token as any).role || "USER";
         (session as any).sessionVersion = (token as any).sv ?? 0;
       }
