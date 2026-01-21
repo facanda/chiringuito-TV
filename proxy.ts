@@ -6,10 +6,10 @@ export default withAuth(
     const { pathname } = req.nextUrl;
 
     // Admin gate (solo si llega aquí ya está autenticado)
-    if (pathname.startsWith("/admin")) {
-      const role = (req.nextauth?.token as any)?.role || "USER";
-      if (role !== "ADMIN") return NextResponse.redirect(new URL("/", req.url));
-    }
+    //if (pathname.startsWith("/admin")) {
+      //const role = (req.nextauth?.token as any)?.role || "USER";
+      //if (role !== "ADMIN") return NextResponse.redirect(new URL("/", req.url));
+    //}
 
     return NextResponse.next();
   },
