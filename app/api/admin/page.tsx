@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import RightToolbar from "../components/RightToolbar";
+import RightToolbar from "@/app/components/RightToolbar";
 
 type UserRow = {
   id: string;
